@@ -1,0 +1,41 @@
+{
+  "Files": [
+    {
+      "Id": "F:\\LogAnalyzerApp\\LogAnalyzerApp\\obj\\Debug\\net8.0\\scopedcss\\projectbundle\\LogAnalyzerApp.bundle.scp.css",
+      "PackagePath": "staticwebassets\\LogAnalyzerApp.bundle.scp.css"
+    },
+    {
+      "Id": "F:\\LogAnalyzerApp\\LogAnalyzerApp\\wwwroot\\app.css",
+      "PackagePath": "staticwebassets\\app.css"
+    },
+    {
+      "Id": "F:\\LogAnalyzerApp\\LogAnalyzerApp\\wwwroot\\bootstrap\\bootstrap.min.css",
+      "PackagePath": "staticwebassets\\bootstrap\\bootstrap.min.css"
+    },
+    {
+      "Id": "F:\\LogAnalyzerApp\\LogAnalyzerApp\\wwwroot\\bootstrap\\bootstrap.min.css.map",
+      "PackagePath": "staticwebassets\\bootstrap\\bootstrap.min.css.map"
+    },
+    {
+      "Id": "F:\\LogAnalyzerApp\\LogAnalyzerApp\\wwwroot\\favicon.png",
+      "PackagePath": "staticwebassets\\favicon.png"
+    },
+    {
+      "Id": "obj\\Debug\\net8.0\\staticwebassets\\msbuild.LogAnalyzerApp.Microsoft.AspNetCore.StaticWebAssets.props",
+      "PackagePath": "build\\Microsoft.AspNetCore.StaticWebAssets.props"
+    },
+    {
+      "Id": "obj\\Debug\\net8.0\\staticwebassets\\msbuild.build.LogAnalyzerApp.props",
+      "PackagePath": "build\\LogAnalyzerApp.props"
+    },
+    {
+      "Id": "obj\\Debug\\net8.0\\staticwebassets\\msbuild.buildMultiTargeting.LogAnalyzerApp.props",
+      "PackagePath": "buildMultiTargeting\\LogAnalyzerApp.props"
+    },
+    {
+      "Id": "obj\\Debug\\net8.0\\staticwebassets\\msbuild.buildTransitive.LogAnalyzerApp.props",
+      "PackagePath": "buildTransitive\\LogAnalyzerApp.props"
+    }
+  ],
+  "ElementsToRemove": []
+}

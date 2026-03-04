@@ -1,0 +1,271 @@
+﻿@page "/"
+@using LogAnalyzerApp.Models
+@using LogAnalyzerApp.Services
+@using System.IO
+@inject LogProcessorService LogProcessor
+@inject IJSRuntime JS
+@rendermode InteractiveServer
+
+<PageTitle>LogAnalyzer - Dashboard</PageTitle>
+
+<div class="container-fluid py-4">
+    <div class="row">
+        <!-- Left Panel -->
+        <div class="col-lg-4">
+            <div class="card shadow-sm p-4 border-0 h-100 bg-white">
+                <h4 class="text-primary mb-3 fw-bold"><i class="bi bi-file-earmark-arrow-up me-2"></i>Load Logs</h4>
+                <div class="mb-3">
+                    <InputFile OnChange="HandleFileSelected" class="form-control form-control-lg" disabled="@isProcessing" />
+                    <div class="small text-muted mt-2 d-flex align-items-center">
+                        <i class="bi bi-info-circle me-1 text-primary"></i> Limit: up to 200MB
+                    </div>
+                </div>
+
+                @if (isProcessing) {
+                    <div class="alert alert-light py-3 border shadow-sm">
+                        <div class="d-flex justify-content-between mb-2 fw-bold small">
+                            <span>@statusMessage</span>
+                            <span>@progress%</span>
+                        </div>
+                        <div class="progress" style="height: 8px;">
+                            <div class="progress-bar progress-bar-striped progress-bar-animated bg-primary" 
+                                 role="progressbar" style="width: @progress%"></div>
+                        </div>
+                    </div>
+                }
+
+                <div class="mt-3">
+                    <label class="small fw-bold mb-2 text-uppercase text-muted">Context lines (before error):</label>
+                    <div class="input-group shadow-sm">
+                        <span class="input-group-text bg-white"><i class="bi bi-layers text-primary"></i></span>
+                        <input type="number" class="form-control" @bind="contextLines" min="0" max="100" />
+                    </div>
+                </div>
+
+                <div class="mt-4 pt-4 border-top">
+                    <button class="btn btn-primary btn-lg w-100 shadow-sm py-3 fw-bold" @onclick="GenerateAndDownload" 
+                            disabled="@(isProcessing || (!selectedTags.Any() && !selectedLevels.Any()))">
+                        <i class="bi bi-gear-fill me-2"></i> Generate Report
+                    </button>
+                    @if (selectedTags.Any() || selectedLevels.Any()) {
+                        <div class="text-center mt-3 small text-primary fw-bold">
+                            <span class="badge bg-primary-subtle text-primary border border-primary-subtle px-3 py-2">
+                                Selected: @(selectedTags.Count + selectedLevels.Count) filters
+                            </span>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Panel -->
+        <div class="col-lg-8">
+            @if (availableTags.Any()) {
+                <div class="card shadow-sm p-4 h-100 border-0 bg-white">
+                    <h4 class="text-dark mb-4 border-bottom pb-3 d-flex justify-content-between align-items-center">
+                        <span class="fw-bold"><i class="bi bi-funnel me-2 text-primary"></i>Analysis Filters</span>
+                        @if (selectedTags.Any()) {
+                            <button class="btn btn-sm btn-outline-danger px-3" @onclick="() => selectedTags.Clear()">
+                                <i class="bi bi-x-circle me-1"></i> Clear selected (@selectedTags.Count)
+                            </button>
+                        }
+                    </h4>
+                    
+                    <div class="row g-4">
+                        <div class="col-md-4">
+                            <h6 class="fw-bold text-uppercase small text-muted mb-3">Log Levels:</h6>
+                            <div class="overflow-auto border rounded-3 p-3 bg-light" style="max-height: 450px;">
+                                @foreach (var level in availableLevels) {
+                                    <div class="form-check mb-3">
+                                        <input class="form-check-input" type="checkbox" @onchange="e => ToggleLevel(level, e.Value)" id="lvl-@level" checked="@selectedLevels.Contains(level)">
+                                        <label class="form-check-label small w-100" for="lvl-@level">
+                                            <span class="badge @GetBadgeClass(level) p-2 w-100 text-start shadow-sm">@level</span>
+                                        </label>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+
+                        <div class="col-md-8 border-start-md">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <h6 class="fw-bold text-uppercase small text-muted mb-0">Tags (@availableTags.Count):</h6>
+                                <div class="input-group input-group-sm w-50 shadow-sm">
+                                    <span class="input-group-text bg-white border-end-0"><i class="bi bi-search text-muted"></i></span>
+                                    <input type="text" class="form-control border-start-0 ps-0" placeholder="Search in @availableTags.Count tags..." @bind="tagSearchQuery" @bind:event="oninput" />
+                                </div>
+                            </div>
+
+                            <div class="overflow-auto border rounded-3 p-3 bg-white" style="max-height: 450px;">
+                                <div class="row row-cols-2 g-2">
+                                    @foreach (var tag in FilteredTags) {
+                                        <div class="col">
+                                            <div class="form-check custom-checkbox">
+                                                <input class="form-check-input" type="checkbox" @onchange="e => ToggleTag(tag, e.Value)" id="tag-@tag" checked="@selectedTags.Contains(tag)">
+                                                <label class="form-check-label small text-truncate d-block" for="tag-@tag" title="@tag">
+                                                    @if (!string.IsNullOrEmpty(tagSearchQuery) && tag.Contains(tagSearchQuery, StringComparison.OrdinalIgnoreCase)) {
+                                                        <mark class="p-0 bg-warning-subtle text-dark">@tag</mark>
+                                                    } else {
+                                                        @tag
+                                                    }
+                                                </label>
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+                                @if (!FilteredTags.Any()) {
+                                    <div class="text-center text-muted py-5 small">
+                                        <i class="bi bi-search display-6 d-block mb-3 opacity-25"></i>
+                                        No results found
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            } else if (!isProcessing) {
+                <div class="card p-5 text-center text-muted border-0 shadow-sm bg-white h-100 d-flex flex-column justify-content-center align-items-center" style="border: 2px dashed #e9ecef !important;">
+                    <div class="bg-primary-subtle p-4 rounded-circle mb-4">
+                        <i class="bi bi-cloud-arrow-up display-3 text-primary"></i>
+                    </div>
+                    <h3 class="text-dark fw-bold">Waiting for data</h3>
+                    <p class="lead text-muted px-5">Upload a logcat file to select tags and levels for extraction.</p>
+                </div>
+            }
+        </div>
+    </div>
+
+    <!-- Debug Panel -->
+    <div class="mt-4 card bg-dark text-light p-4 font-monospace small shadow-lg border-0" style="border-radius: 12px; background: linear-gradient(145deg, #1a1a1a, #2d2d2d) !important;">
+        <div class="d-flex justify-content-between border-bottom border-secondary mb-3 pb-2 text-info fw-bold">
+            <span class="d-flex align-items-center"><i class="bi bi-terminal me-2"></i> ANALYSIS LOGS</span>
+            <span class="badge bg-secondary text-light">V200-STABLE</span>
+        </div>
+        <div style="max-height: 200px; overflow-y: auto;" class="custom-scrollbar">
+            @foreach (var log in debugLogs) {
+                <div class="mb-1 d-flex">
+                    <span class="text-muted me-2" style="min-width: 80px;">[@log.Timestamp.ToString("HH:mm:ss")]</span> 
+                    <span class="@(log.Message.StartsWith("ERROR") ? "text-danger" : "text-light-emphasis")">@log.Message</span>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+<script>
+    window.downloadFile = (fileName, contentBase64) => {
+        const link = document.createElement('a');
+        link.download = fileName;
+        link.href = 'data:text/plain;base64,' + contentBase64;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+</script>
+
+@code {
+    private record DebugLogEntry(string Message, DateTime Timestamp);
+    private List<DebugLogEntry> debugLogs = new();
+
+    private string? tempFilePath;
+    private List<string> availableTags = new();
+    private List<string> availableLevels = new();
+    private List<string> selectedTags = new();
+    private List<string> selectedLevels = new();
+    private string tagSearchQuery = "";
+    private int contextLines = 10;
+    private bool isProcessing = false;
+    private int progress = 0;
+    private string statusMessage = "";
+    private string lastError = "";
+
+    private IEnumerable<string> FilteredTags => 
+        string.IsNullOrWhiteSpace(tagSearchQuery) 
+            ? availableTags.Take(1000) 
+            : availableTags.Where(t => t.Contains(tagSearchQuery, StringComparison.OrdinalIgnoreCase)).Take(500);
+
+    private void AddLog(string msg) {
+        debugLogs.Add(new DebugLogEntry(msg, DateTime.Now));
+    }
+
+    private async Task HandleFileSelected(InputFileChangeEventArgs e)
+    {
+        try {
+            isProcessing = true;
+            lastError = "";
+            progress = 0;
+            statusMessage = "Starting...";
+            debugLogs.Clear();
+            availableTags.Clear();
+            availableLevels.Clear();
+            selectedTags.Clear();
+            selectedLevels.Clear();
+            
+            AddLog($"Loading file: {e.File.Name}");
+            StateHasChanged();
+
+            tempFilePath = Path.GetTempFileName();
+            
+            using var sourceStream = e.File.OpenReadStream(209715200); 
+            using var destStream = new FileStream(tempFilePath, FileMode.Create);
+            
+            var buffer = new byte[1024 * 512];
+            int bytesRead;
+            long totalRead = 0;
+            long totalSize = e.File.Size;
+
+            while ((bytesRead = await sourceStream.ReadAsync(buffer, 0, buffer.Length)) > 0)
+            {
+                await destStream.WriteAsync(buffer, 0, bytesRead);
+                totalRead += bytesRead;
+                int newProgress = (int)(totalRead * 100 / totalSize);
+                
+                if (newProgress > progress) {
+                    progress = newProgress;
+                    statusMessage = $"Uploading: {totalRead / 1024 / 1024} / {totalSize / 1024 / 1024} MB";
+                    StateHasChanged();
+                    await Task.Delay(1);
+                }
+            }
+
+            AddLog("File uploaded. Analyzing tags (this may take a few seconds for large files)...");
+            statusMessage = "Analyzing...";
+            StateHasChanged();
+            
+            destStream.Position = 0;
+            var result = await LogProcessor.ExtractUniqueTagsAndLevelsAsync(destStream);
+            availableTags = result.Tags;
+            availableLevels = result.Levels;
+            
+            AddLog($"Analysis complete. Detected {availableTags.Count} tags.");
+            statusMessage = "Ready!";
+            progress = 100;
+        } catch (Exception ex) {
+            lastError = ex.Message;
+            AddLog($"ERROR: {ex.Message}");
+        } finally {
+            isProcessing = false;
+            StateHasChanged();
+        }
+    }
+
+    private void ToggleTag(string t, object v) { if ((bool)v!) { if(!selectedTags.Contains(t)) selectedTags.Add(t); } else selectedTags.Remove(t); }
+    private void ToggleLevel(string l, object v) { if ((bool)v!) { if(!selectedLevels.Contains(l)) selectedLevels.Add(l); } else selectedLevels.Remove(l); }
+
+    private async Task GenerateAndDownload()
+    {
+        if (string.IsNullOrEmpty(tempFilePath)) return;
+        AddLog($"Generating extract (Tags: {selectedTags.Count}, Context: {contextLines})...");
+        using var inputFs = new FileStream(tempFilePath, FileMode.Open);
+        using var memoryStream = new MemoryStream();
+        await LogProcessor.GenerateFilteredLogAsync(inputFs, memoryStream, selectedTags, selectedLevels, contextLines);
+        var base64 = Convert.ToBase64String(memoryStream.ToArray());
+        await JS.InvokeVoidAsync("downloadFile", "log_extract.txt", base64);
+        AddLog("Download started.");
+    }
+
+    private string GetBadgeClass(string level) => level switch {
+        "Verbose" => "bg-secondary", "Debug" => "bg-info text-dark",
+        "Information" => "bg-success", "Warning" => "bg-warning text-dark",
+        "Error" => "bg-danger", "Fatal" => "bg-dark", _ => "bg-primary"
+    };
+}
