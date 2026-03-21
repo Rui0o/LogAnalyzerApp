@@ -1,8 +1,5 @@
 using LogAnalyzerApp.Models;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Threading.Tasks;
+using System.Text;
 
 namespace LogAnalyzerApp.Services;
 
@@ -13,7 +10,10 @@ public class LogProcessorService
         var tags = new HashSet<string>();
         var levels = new HashSet<string>();
 
-        using var reader = new StreamReader(fileStream);
+        // leaveOpen: true — the caller owns the stream lifetime; we must not close it
+        using var reader = new StreamReader(fileStream, Encoding.UTF8,
+            detectEncodingFromByteOrderMarks: true, bufferSize: 4096, leaveOpen: true);
+
         string? line;
         while ((line = await reader.ReadLineAsync()) != null)
         {
@@ -25,21 +25,29 @@ public class LogProcessorService
         return (tags.OrderBy(t => t).ToList(), levels.OrderBy(l => l).ToList());
     }
 
-    public async Task GenerateFilteredLogAsync(Stream inputFileStream, Stream outputFileStream, List<string> selectedTags, List<string> selectedLevels, int contextLines)
+    public async Task GenerateFilteredLogAsync(
+        Stream inputFileStream,
+        Stream outputFileStream,
+        List<string> selectedTags,
+        List<string> selectedLevels,
+        int contextLines)
     {
-        using var reader = new StreamReader(inputFileStream);
-        using var writer = new StreamWriter(outputFileStream);
-        
+        // leaveOpen: true — callers control the lifetime of both streams
+        using var reader = new StreamReader(inputFileStream, Encoding.UTF8,
+            detectEncodingFromByteOrderMarks: true, bufferSize: 4096, leaveOpen: true);
+        using var writer = new StreamWriter(outputFileStream, Encoding.UTF8,
+            bufferSize: 4096, leaveOpen: true);
+
         var buffer = new Queue<string>(contextLines > 0 ? contextLines : 1);
         string? line;
 
         while ((line = await reader.ReadLineAsync()) != null)
         {
             var entry = LogEntry.Parse(line);
-            
-            bool tagMatch = selectedTags.Any() && selectedTags.Contains(entry.Tag);
-            bool levelMatch = selectedLevels.Any() && selectedLevels.Contains(entry.Level);
-            
+
+            bool tagMatch = selectedTags.Count > 0 && selectedTags.Contains(entry.Tag);
+            bool levelMatch = selectedLevels.Count > 0 && selectedLevels.Contains(entry.Level);
+
             if (tagMatch || levelMatch)
             {
                 while (buffer.Count > 0)
@@ -60,6 +68,7 @@ public class LogProcessorService
                 }
             }
         }
+
         await writer.FlushAsync();
     }
 }

@@ -16,8 +16,13 @@ public class LogEntry
         { " W ", "Warning" },
         { " E ", "Error" },
         { " F ", "Fatal" },
-        { " FATAL ", "Fatal" }
     };
+
+    // Logcat format: "MM-DD HH:MM:SS.mmm  PID  TID L Tag: Message"
+    // The level character always appears in the header section (before the tag name),
+    // never beyond ~50 characters. Limiting the search prevents false matches when
+    // the message body happens to contain tokens like " E " or " W ".
+    private const int MaxHeaderLength = 50;
 
     public static LogEntry Parse(string line)
     {
@@ -27,11 +32,14 @@ public class LogEntry
         int levelIndex = -1;
         string foundKey = "";
 
+        int searchLen = Math.Min(line.Length, MaxHeaderLength);
+
         foreach (var key in LevelMapping.Keys)
         {
-            levelIndex = line.IndexOf(key);
-            if (levelIndex != -1)
+            int idx = line.IndexOf(key, 0, searchLen);
+            if (idx != -1)
             {
+                levelIndex = idx;
                 foundKey = key;
                 break;
             }
