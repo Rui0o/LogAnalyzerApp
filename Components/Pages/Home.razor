@@ -4,157 +4,181 @@
 @using System.IO
 @inject LogProcessorService LogProcessor
 @inject DownloadFileService DownloadService
+@inject AppStateService AppState
 @inject IJSRuntime JS
 @implements IDisposable
 @rendermode InteractiveServer
 
 <PageTitle>LogAnalyzer - Dashboard</PageTitle>
 
-<div class="container-fluid py-4">
-    <div class="row">
-        <!-- Left Panel -->
-        <div class="col-lg-4">
-            <div class="card shadow-sm p-4 border-0 h-100 bg-white">
-                <h4 class="text-primary mb-3 fw-bold"><i class="bi bi-file-earmark-arrow-up me-2"></i>Load Logs</h4>
-                <div class="mb-3">
-                    <InputFile OnChange="HandleFileSelected" class="form-control form-control-lg" disabled="@isProcessing" />
-                    <div class="small text-muted mt-2 d-flex align-items-center">
-                        <i class="bi bi-info-circle me-1 text-primary"></i> Limit: up to 200MB
-                    </div>
-                </div>
+<div class="container-fluid py-4" style="max-width: 1200px;">
 
-                @if (isProcessing || isGenerating) {
-                    <div class="alert alert-light py-3 border shadow-sm">
-                        <div class="d-flex justify-content-between mb-2 fw-bold small">
-                            <span>@statusMessage</span>
-                            @if (!isAnalyzing && !isGenerating) {
-                                <span>@progress%</span>
-                            }
-                        </div>
-                        <div class="progress" style="height: 8px;">
-                            @if (isAnalyzing || isGenerating) {
-                                <!-- Indeterminate bar: analysis/generation progress is unknown -->
-                                <div class="progress-bar progress-bar-striped progress-bar-animated bg-primary"
-                                     role="progressbar" style="width: 100%"></div>
-                            } else {
-                                <div class="progress-bar progress-bar-striped progress-bar-animated bg-primary"
-                                     role="progressbar" style="width: @progress%"></div>
-                            }
-                        </div>
-                    </div>
+    <!-- Upload Zone -->
+    <div class="upload-zone @(availableTags.Any() ? "has-file" : "") mb-3"
+         @ondragover:preventDefault @ondrop:preventDefault>
+        <InputFile OnChange="HandleFileSelected" class="upload-input" disabled="@isProcessing" />
+        @if (availableTags.Any()) {
+            <div>
+                <i class="bi bi-check-circle text-success me-2"></i>
+                <span class="fw-bold">@loadedFileName</span>
+                <span class="text-muted ms-2" style="font-size:0.8rem;">— drop a new file to replace</span>
+            </div>
+        } else {
+            <div>
+                <i class="bi bi-cloud-arrow-up d-block mb-2" style="font-size:2.5rem; color:var(--accent); opacity:0.7;"></i>
+                <span class="fw-bold" style="font-size:1.05rem;">Drop a logcat file here</span>
+                <span class="d-block text-muted mt-1" style="font-size:0.8rem;">or click to browse &nbsp;·&nbsp; up to 200 MB</span>
+            </div>
+        }
+    </div>
+
+    <!-- Progress bar (inline, below upload zone) -->
+    @if (isProcessing || isGenerating) {
+        <div class="progress-wrap mb-3">
+            <div class="d-flex justify-content-between mb-2" style="font-size:0.82rem;">
+                <span class="text-muted">@statusMessage</span>
+                @if (!isAnalyzing && !isGenerating) {
+                    <span class="text-muted">@progress%</span>
                 }
+            </div>
+            <div class="progress">
+                @if (isAnalyzing || isGenerating) {
+                    <div class="progress-bar progress-bar-striped progress-bar-animated"
+                         role="progressbar" style="width:100%"></div>
+                } else {
+                    <div class="progress-bar progress-bar-striped progress-bar-animated"
+                         role="progressbar" style="width:@progress%"></div>
+                }
+            </div>
+        </div>
+    }
 
-                <div class="mt-3">
-                    <label class="small fw-bold mb-2 text-uppercase text-muted">Context lines (before match):</label>
-                    <div class="input-group shadow-sm">
-                        <span class="input-group-text bg-white"><i class="bi bi-layers text-primary"></i></span>
-                        <input type="number" class="form-control" @bind="contextLines" min="0" max="100" />
-                    </div>
-                </div>
-
-                <div class="mt-4 pt-4 border-top">
-                    <button class="btn btn-primary btn-lg w-100 shadow-sm py-3 fw-bold" @onclick="GenerateAndDownload"
-                            disabled="@(isProcessing || isGenerating || (!selectedTags.Any() && !selectedLevels.Any()))">
-                        <i class="bi bi-gear-fill me-2"></i> Generate Report
+    <!-- Filters (visible after file load) -->
+    @if (availableTags.Any()) {
+        <div class="filters-section mb-3">
+            <!-- Header row -->
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <span class="fw-bold" style="font-size:0.75rem; text-transform:uppercase; letter-spacing:0.06em; color:var(--text-muted);">
+                    <i class="bi bi-funnel me-1"></i> Filters
+                </span>
+                @if (selectedTags.Any() || selectedLevels.Any()) {
+                    <button class="btn-clear" @onclick="ClearAllFilters">
+                        <i class="bi bi-x me-1"></i>Clear all (@(selectedTags.Count + selectedLevels.Count))
                     </button>
-                    @if (selectedTags.Any() || selectedLevels.Any()) {
-                        <div class="text-center mt-3 small text-primary fw-bold">
-                            <span class="badge bg-primary-subtle text-primary border border-primary-subtle px-3 py-2">
-                                Selected: @(selectedTags.Count + selectedLevels.Count) filters
-                            </span>
-                        </div>
+                }
+            </div>
+
+            <!-- Level pills -->
+            <div class="d-flex flex-wrap gap-2 mb-3">
+                @foreach (var level in availableLevels) {
+                    var levelCss = GetLevelCss(level);
+                    var isActive = selectedLevels.Contains(level);
+                    var count = levelCounts.GetValueOrDefault(level, 0);
+                    <button class="level-pill @levelCss @(isActive ? "active" : "")"
+                            @onclick="() => ToggleLevelClick(level)">
+                        @level <span class="level-pill-count">@count</span>
+                    </button>
+                }
+            </div>
+
+            <!-- Search -->
+            <div class="search-wrapper mb-3">
+                <i class="bi bi-search search-icon" style="font-size:0.8rem;"></i>
+                <input type="text" class="search-input"
+                       placeholder="Search @availableTags.Count tags..."
+                       @bind="tagSearchQuery" @bind:event="oninput" />
+                @if (!string.IsNullOrWhiteSpace(tagSearchQuery) && FilteredTags.Any()) {
+                    <button class="btn-select-filtered" @onclick="SelectFiltered">
+                        Select all (@FilteredTags.Count())
+                    </button>
+                }
+            </div>
+
+            <!-- Tag chips -->
+            <div class="d-flex justify-content-between align-items-center mb-2" style="font-size:0.75rem; color:var(--text-muted);">
+                <span>
+                    @if (!string.IsNullOrWhiteSpace(tagSearchQuery)) {
+                        <span>@FilteredTags.Count() of @availableTags.Count tags</span>
+                    } else {
+                        <span>@availableTags.Count tags</span>
                     }
-                </div>
+                </span>
+                @if (selectedTags.Any()) {
+                    <span style="color:#a5b4fc;">@selectedTags.Count selected</span>
+                }
+            </div>
+            <div class="tag-chips-wrap">
+                @foreach (var tag in FilteredTags) {
+                    var isActive = selectedTags.Contains(tag);
+                    <button class="tag-chip @(isActive ? "active" : "")"
+                            title="@tag"
+                            @onclick="() => ToggleTagClick(tag)">
+                        @if (!string.IsNullOrEmpty(tagSearchQuery) && tag.Contains(tagSearchQuery, StringComparison.OrdinalIgnoreCase)) {
+                            <strong>@tag</strong>
+                        } else {
+                            @tag
+                        }
+                    </button>
+                }
+                @if (!FilteredTags.Any()) {
+                    <span class="text-muted" style="font-size:0.82rem;">No tags match "@tagSearchQuery"</span>
+                }
             </div>
         </div>
 
-        <!-- Right Panel -->
-        <div class="col-lg-8">
-            @if (availableTags.Any()) {
-                <div class="card shadow-sm p-4 h-100 border-0 bg-white">
-                    <h4 class="text-dark mb-4 border-bottom pb-3 d-flex justify-content-between align-items-center">
-                        <span class="fw-bold"><i class="bi bi-funnel me-2 text-primary"></i>Analysis Filters</span>
-                        @if (selectedTags.Any() || selectedLevels.Any()) {
-                            <button class="btn btn-sm btn-outline-danger px-3" @onclick="ClearAllFilters">
-                                <i class="bi bi-x-circle me-1"></i> Clear selected (@(selectedTags.Count + selectedLevels.Count))
-                            </button>
-                        }
-                    </h4>
+        <!-- Action bar -->
+        <div class="action-bar mb-3">
+            <label>Context</label>
+            <div class="context-stepper">
+                <button @onclick="() => contextLines = Math.Max(0, contextLines - 1)">−</button>
+                <input type="number" class="context-input" @bind="contextLines" @bind:after="ClampContextLines" min="0" max="50" />
+                <button @onclick="() => contextLines = Math.Min(50, contextLines + 1)">+</button>
+            </div>
 
-                    <div class="row g-4">
-                        <div class="col-md-4">
-                            <h6 class="fw-bold text-uppercase small text-muted mb-3">Log Levels:</h6>
-                            <div class="overflow-auto border rounded-3 p-3 bg-light" style="max-height: 450px;">
-                                @foreach (var level in availableLevels) {
-                                    <div class="form-check mb-3">
-                                        <input class="form-check-input" type="checkbox" @onchange="e => ToggleLevel(level, e.Value)" id="lvl-@level" checked="@selectedLevels.Contains(level)">
-                                        <label class="form-check-label small w-100" for="lvl-@level">
-                                            <span class="badge @GetBadgeClass(level) p-2 w-100 text-start shadow-sm">@level</span>
-                                        </label>
-                                    </div>
-                                }
-                            </div>
-                        </div>
+            <div class="direction-toggle">
+                <button class="dir-btn @(contextDirection == ContextDirection.Before ? "active" : "")"
+                        @onclick='() => contextDirection = ContextDirection.Before'>Before</button>
+                <button class="dir-btn @(contextDirection == ContextDirection.After ? "active" : "")"
+                        @onclick='() => contextDirection = ContextDirection.After'>After</button>
+                <button class="dir-btn @(contextDirection == ContextDirection.Both ? "active" : "")"
+                        @onclick='() => contextDirection = ContextDirection.Both'>Both</button>
+            </div>
 
-                        <div class="col-md-8 border-start-md">
-                            <div class="d-flex justify-content-between align-items-center mb-3">
-                                <h6 class="fw-bold text-uppercase small text-muted mb-0">Tags (@availableTags.Count):</h6>
-                                <div class="input-group input-group-sm w-50 shadow-sm">
-                                    <span class="input-group-text bg-white border-end-0"><i class="bi bi-search text-muted"></i></span>
-                                    <input type="text" class="form-control border-start-0 ps-0" placeholder="Search in @availableTags.Count tags..." @bind="tagSearchQuery" @bind:event="oninput" />
-                                </div>
-                            </div>
+            <button class="separator-toggle @(useSeparator ? "active" : "")"
+                    @onclick='() => useSeparator = !useSeparator'
+                    title="Insert separator between result groups">
+                <i class="bi bi-layout-split me-1"></i>Separator
+            </button>
 
-                            <div class="overflow-auto border rounded-3 p-3 bg-white" style="max-height: 450px;">
-                                <div class="row row-cols-2 g-2">
-                                    @foreach (var tag in FilteredTags) {
-                                        <div class="col">
-                                            <div class="form-check custom-checkbox">
-                                                <input class="form-check-input" type="checkbox" @onchange="e => ToggleTag(tag, e.Value)" id="tag-@tag" checked="@selectedTags.Contains(tag)">
-                                                <label class="form-check-label small text-truncate d-block" for="tag-@tag" title="@tag">
-                                                    @if (!string.IsNullOrEmpty(tagSearchQuery) && tag.Contains(tagSearchQuery, StringComparison.OrdinalIgnoreCase)) {
-                                                        <mark class="p-0 bg-warning-subtle text-dark">@tag</mark>
-                                                    } else {
-                                                        @tag
-                                                    }
-                                                </label>
-                                            </div>
-                                        </div>
-                                    }
-                                </div>
-                                @if (!FilteredTags.Any()) {
-                                    <div class="text-center text-muted py-5 small">
-                                        <i class="bi bi-search display-6 d-block mb-3 opacity-25"></i>
-                                        No results found
-                                    </div>
-                                }
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            } else if (!isProcessing) {
-                <div class="card p-5 text-center text-muted border-0 shadow-sm bg-white h-100 d-flex flex-column justify-content-center align-items-center" style="border: 2px dashed #e9ecef !important;">
-                    <div class="bg-primary-subtle p-4 rounded-circle mb-4">
-                        <i class="bi bi-cloud-arrow-up display-3 text-primary"></i>
-                    </div>
-                    <h3 class="text-dark fw-bold">Waiting for data</h3>
-                    <p class="lead text-muted px-5">Upload a logcat file to select tags and levels for extraction.</p>
-                </div>
+            @if (selectedTags.Any() || selectedLevels.Any()) {
+                <span class="filter-count-badge">@(selectedTags.Count + selectedLevels.Count) filters</span>
             }
-        </div>
-    </div>
 
-    <!-- Debug Panel -->
-    <div class="mt-4 card bg-dark text-light p-4 font-monospace small shadow-lg border-0" style="border-radius: 12px; background: linear-gradient(145deg, #1a1a1a, #2d2d2d) !important;">
-        <div class="d-flex justify-content-between border-bottom border-secondary mb-3 pb-2 text-info fw-bold">
-            <span class="d-flex align-items-center"><i class="bi bi-terminal me-2"></i> ANALYSIS LOGS</span>
-            <span class="badge bg-secondary text-light">V200-STABLE</span>
+            <button class="btn-generate"
+                    @onclick="GenerateAndDownload"
+                    disabled="@(isProcessing || isGenerating || (!selectedTags.Any() && !selectedLevels.Any()))">
+                <i class="bi bi-gear-fill me-1"></i> Generate Report
+            </button>
         </div>
-        <div style="max-height: 200px; overflow-y: auto;" class="custom-scrollbar">
+    } else if (!isProcessing) {
+        <!-- Empty state -->
+        <div class="empty-state mb-3">
+            <i class="bi bi-inbox empty-icon"></i>
+            <p class="mb-0" style="font-size:0.9rem;">Upload a logcat file to see filters</p>
+        </div>
+    }
+
+    <!-- Debug Terminal -->
+    <div class="debug-terminal">
+        <div class="terminal-header">
+            <span><i class="bi bi-terminal me-2"></i>ANALYSIS LOGS</span>
+            <span style="font-size:0.7rem; color:var(--text-muted); font-weight:400;">@debugLogs.Count entries</span>
+        </div>
+        <div class="terminal-body">
             @foreach (var log in debugLogs) {
-                <div class="mb-1 d-flex">
-                    <span class="text-muted me-2" style="min-width: 80px;">[@log.Timestamp.ToString("HH:mm:ss")]</span>
-                    <span class="@(log.Message.StartsWith("ERROR") ? "text-danger" : "text-light-emphasis")">@log.Message</span>
+                <div class="log-line">
+                    <span class="log-ts">[@log.Timestamp.ToString("HH:mm:ss")]</span>
+                    <span class="log-msg @(log.Message.StartsWith("ERROR") ? "error" : "")">@log.Message</span>
                 </div>
             }
         </div>
@@ -162,8 +186,6 @@
 </div>
 
 <script>
-    // Blazor Server intercepts all anchor clicks as client-side navigation.
-    // Using fetch() + a blob URL bypasses that interception entirely.
     window.downloadFromUrl = async (url, filename) => {
         try {
             const response = await fetch(url);
@@ -191,12 +213,16 @@
     private List<DebugLogEntry> debugLogs = new();
 
     private string? tempFilePath;
+    private string loadedFileName = "";
     private List<string> availableTags = new();
     private List<string> availableLevels = new();
+    private Dictionary<string, int> levelCounts = new();
     private List<string> selectedTags = new();
     private List<string> selectedLevels = new();
     private string tagSearchQuery = "";
     private int contextLines = 10;
+    private ContextDirection contextDirection = ContextDirection.Before;
+    private bool useSeparator = false;
     private bool isProcessing = false;
     private bool isAnalyzing = false;
     private bool isGenerating = false;
@@ -217,6 +243,25 @@
         selectedLevels.Clear();
     }
 
+    private void ClampContextLines() {
+        contextLines = Math.Clamp(contextLines, 0, 50);
+    }
+
+    private void ToggleLevelClick(string level) {
+        if (selectedLevels.Contains(level)) selectedLevels.Remove(level);
+        else selectedLevels.Add(level);
+    }
+
+    private void ToggleTagClick(string tag) {
+        if (selectedTags.Contains(tag)) selectedTags.Remove(tag);
+        else selectedTags.Add(tag);
+    }
+
+    private void SelectFiltered() {
+        foreach (var tag in FilteredTags)
+            if (!selectedTags.Contains(tag)) selectedTags.Add(tag);
+    }
+
     private async Task HandleFileSelected(InputFileChangeEventArgs e)
     {
         try {
@@ -224,6 +269,7 @@
             isAnalyzing = false;
             progress = 0;
             statusMessage = "Starting...";
+            loadedFileName = e.File.Name;
             debugLogs.Clear();
             availableTags.Clear();
             availableLevels.Clear();
@@ -233,7 +279,6 @@
             AddLog($"Loading file: {e.File.Name}");
             StateHasChanged();
 
-            // Delete the previous temp file before creating a new one
             DeleteTempFile();
             tempFilePath = Path.GetTempFileName();
 
@@ -268,8 +313,10 @@
             var result = await LogProcessor.ExtractUniqueTagsAndLevelsAsync(destStream);
             availableTags = result.Tags;
             availableLevels = result.Levels;
+            levelCounts = result.LevelCounts;
 
             AddLog($"Analysis complete. Found {availableTags.Count} tags, {availableLevels.Count} levels.");
+            AppState.SetFileInfo(loadedFileName, availableTags.Count, availableLevels.Count);
             statusMessage = "Ready!";
         } catch (Exception ex) {
             AddLog($"ERROR: {ex.Message}");
@@ -278,16 +325,6 @@
             isAnalyzing = false;
             StateHasChanged();
         }
-    }
-
-    private void ToggleTag(string t, object? v) {
-        if ((bool)v!) { if (!selectedTags.Contains(t)) selectedTags.Add(t); }
-        else selectedTags.Remove(t);
-    }
-
-    private void ToggleLevel(string l, object? v) {
-        if ((bool)v!) { if (!selectedLevels.Contains(l)) selectedLevels.Add(l); }
-        else selectedLevels.Remove(l);
     }
 
     private async Task GenerateAndDownload()
@@ -307,16 +344,15 @@
             using (var inputFs = new FileStream(tempFilePath, FileMode.Open, FileAccess.Read, FileShare.Read))
             using (var outputFs = new FileStream(outputTempPath, FileMode.Create, FileAccess.Write, FileShare.None))
             {
-                await LogProcessor.GenerateFilteredLogAsync(inputFs, outputFs, selectedTags, selectedLevels, contextLines);
+                await LogProcessor.GenerateFilteredLogAsync(inputFs, outputFs, selectedTags, selectedLevels, contextLines, contextDirection, useSeparator);
             }
 
             var token = DownloadService.RegisterFile(outputTempPath);
-            outputTempPath = null; // ownership transferred to DownloadFileService
+            outputTempPath = null;
             await JS.InvokeVoidAsync("downloadFromUrl", $"/download/{token}", "log_extract.txt");
             AddLog("Download started.");
         } catch (Exception ex) {
             AddLog($"ERROR: {ex.Message}");
-            // Clean up the output temp file if something went wrong before it was registered
             if (outputTempPath != null)
             {
                 try { File.Delete(outputTempPath); } catch { /* best-effort */ }
@@ -342,13 +378,23 @@
         DeleteTempFile();
     }
 
+    private string GetLevelCss(string level) => level switch {
+        "Verbose"     => "lvl-verbose",
+        "Debug"       => "lvl-debug",
+        "Information" => "lvl-info",
+        "Warning"     => "lvl-warning",
+        "Error"       => "lvl-error",
+        "Fatal"       => "lvl-fatal",
+        _             => "lvl-info"
+    };
+
     private string GetBadgeClass(string level) => level switch {
-        "Verbose" => "bg-secondary",
-        "Debug" => "bg-info text-dark",
+        "Verbose"     => "bg-secondary",
+        "Debug"       => "bg-info text-dark",
         "Information" => "bg-success",
-        "Warning" => "bg-warning text-dark",
-        "Error" => "bg-danger",
-        "Fatal" => "bg-dark",
-        _ => "bg-primary"
+        "Warning"     => "bg-warning text-dark",
+        "Error"       => "bg-danger",
+        "Fatal"       => "bg-dark",
+        _             => "bg-primary"
     };
 }

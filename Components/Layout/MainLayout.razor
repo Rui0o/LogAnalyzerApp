@@ -1,4 +1,7 @@
-﻿@inherits LayoutComponentBase
+@inherits LayoutComponentBase
+@using LogAnalyzerApp.Services
+@inject AppStateService AppState
+@implements IDisposable
 
 <div class="page">
     <div class="sidebar shadow">
@@ -6,11 +9,17 @@
     </div>
 
     <main>
-        <div class="top-row px-4 border-bottom bg-white shadow-sm d-flex align-items-center justify-content-end">
-            <div class="d-flex align-items-center bg-light px-3 py-1 rounded-pill border">
-                <span class="text-primary me-2"><i class="bi bi-clock-history"></i></span>
-                <span class="text-muted small fw-bold">Active Session: @DateTime.Now.ToString("HH:mm")</span>
-            </div>
+        <div class="top-row px-4">
+            @if (!string.IsNullOrEmpty(AppState.FileName)) {
+                <span class="topbar-file-info">
+                    <i class="bi bi-file-earmark-text me-2"></i>
+                    <span class="topbar-filename">@AppState.FileName</span>
+                    <span class="topbar-sep">·</span>
+                    <span>@AppState.TagCount tags</span>
+                    <span class="topbar-sep">·</span>
+                    <span>@AppState.LevelCount levels</span>
+                </span>
+            }
         </div>
 
         <article class="content px-4 py-2">
@@ -24,3 +33,20 @@
     <a href="" class="reload">Reload</a>
     <a class="dismiss">🗙</a>
 </div>
+
+@code {
+    protected override void OnInitialized()
+    {
+        AppState.OnChange += OnStateChanged;
+    }
+
+    private void OnStateChanged()
+    {
+        InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        AppState.OnChange -= OnStateChanged;
+    }
+}
