@@ -4,6 +4,7 @@ using LogAnalyzerApp.Services;
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddScoped<LogProcessorService>();
+builder.Services.AddScoped<AppStateService>();
 
 // Singleton: survives across Blazor circuits so download tokens remain valid
 // even after the circuit that generated them has already navigated away.
