@@ -1,0 +1,12 @@
+## Build output
+bin/
+obj/
+
+## IDE
+.idea/
+.vs/
+*.user
+*.suo
+
+## Publish output
+publish/

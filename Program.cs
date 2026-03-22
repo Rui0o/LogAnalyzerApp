@@ -1,7 +1,17 @@
 using LogAnalyzerApp.Components;
 using LogAnalyzerApp.Services;
+using System.Diagnostics;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// When running as a published standalone app, use the URL from config
+// so users can simply double-click to launch without certificate issues.
+// Admins can change the URL in appsettings.json (e.g. http://0.0.0.0:5000 for LAN hosting).
+if (!builder.Environment.IsDevelopment())
+{
+    var url = builder.Configuration["Urls"] ?? "http://localhost:5000";
+    builder.WebHost.UseUrls(url);
+}
 
 builder.Services.AddScoped<LogProcessorService>();
 builder.Services.AddScoped<AppStateService>();
@@ -28,7 +38,11 @@ if (!app.Environment.IsDevelopment())
     app.UseHsts();
 }
 
-app.UseHttpsRedirection();
+if (app.Environment.IsDevelopment())
+{
+    app.UseHttpsRedirection();
+}
+
 app.UseStaticFiles();
 app.UseAntiforgery();
 
@@ -57,5 +71,19 @@ app.MapGet("/download/{token}", (string token, DownloadFileService downloadServi
 
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
+
+// Auto-open the browser when running as a standalone app (not in Development/IDE).
+if (!app.Environment.IsDevelopment())
+{
+    app.Lifetime.ApplicationStarted.Register(() =>
+    {
+        // Open the first configured URL in the default browser.
+        var listenUrl = app.Configuration["Urls"] ?? "http://localhost:5000";
+        // If listening on 0.0.0.0 (all interfaces), open localhost in the browser instead.
+        var browserUrl = listenUrl.Replace("0.0.0.0", "localhost");
+        try { Process.Start(new ProcessStartInfo(browserUrl) { UseShellExecute = true }); }
+        catch { /* best-effort: user can open manually */ }
+    });
+}
 
 app.Run();
