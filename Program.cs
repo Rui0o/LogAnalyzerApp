@@ -9,7 +9,7 @@ var builder = WebApplication.CreateBuilder(args);
 // Admins can change the URL in appsettings.json (e.g. http://0.0.0.0:5000 for LAN hosting).
 if (!builder.Environment.IsDevelopment())
 {
-    var url = builder.Configuration["Urls"] ?? "http://localhost:5000";
+    var url = builder.Configuration["StandaloneUrls"] ?? "http://localhost:5000";
     builder.WebHost.UseUrls(url);
 }
 
@@ -78,7 +78,7 @@ if (!app.Environment.IsDevelopment())
     app.Lifetime.ApplicationStarted.Register(() =>
     {
         // Open the first configured URL in the default browser.
-        var listenUrl = app.Configuration["Urls"] ?? "http://localhost:5000";
+        var listenUrl = app.Configuration["StandaloneUrls"] ?? "http://localhost:5000";
         // If listening on 0.0.0.0 (all interfaces), open localhost in the browser instead.
         var browserUrl = listenUrl.Replace("0.0.0.0", "localhost");
         try { Process.Start(new ProcessStartInfo(browserUrl) { UseShellExecute = true }); }
