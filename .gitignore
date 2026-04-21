@@ -5,6 +5,7 @@ obj/
 ## IDE
 .idea/
 .vs/
+.claude/
 *.user
 *.suo
 

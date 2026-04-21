@@ -38,7 +38,8 @@ public class LogProcessorService
         List<string> selectedLevels,
         int contextLines,
         ContextDirection direction = ContextDirection.Before,
-        bool addSeparator = false)
+        bool addSeparator = false,
+        string? keywordFilter = null)
     {
         using var reader = new StreamReader(inputFileStream, Encoding.UTF8,
             detectEncodingFromByteOrderMarks: true, bufferSize: 4096, leaveOpen: true);
@@ -49,13 +50,19 @@ public class LogProcessorService
         int afterRemaining = 0;
         bool needsSeparator = false;
         bool everWroteContent = false;
+        var keywords = string.IsNullOrWhiteSpace(keywordFilter)
+            ? Array.Empty<string>()
+            : keywordFilter.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                           .Where(k => !string.IsNullOrWhiteSpace(k))
+                           .ToArray();
 
         string? line;
         while ((line = await reader.ReadLineAsync()) != null)
         {
             var entry = LogEntry.Parse(line);
             bool isMatch = (selectedTags.Count > 0 && selectedTags.Contains(entry.Tag))
-                        || (selectedLevels.Count > 0 && selectedLevels.Contains(entry.Level));
+                        || (selectedLevels.Count > 0 && selectedLevels.Contains(entry.Level))
+                        || (keywords.Length > 0 && keywords.Any(k => line.Contains(k, StringComparison.OrdinalIgnoreCase)));
 
             if (isMatch)
             {

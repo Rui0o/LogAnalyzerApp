@@ -1,5 +1,6 @@
 using LogAnalyzerApp.Components;
 using LogAnalyzerApp.Services;
+using Microsoft.AspNetCore.Http.Features;
 using System.Diagnostics;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -19,12 +20,13 @@ builder.Services.AddScoped<AppStateService>();
 // Singleton: survives across Blazor circuits so download tokens remain valid
 // even after the circuit that generated them has already navigated away.
 builder.Services.AddSingleton<DownloadFileService>();
+builder.Services.AddSingleton<UploadFileService>();
 
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents()
     .AddHubOptions(options =>
     {
-        options.MaximumReceiveMessageSize = 209715200; // 200 MB
+        options.MaximumReceiveMessageSize = 524288000; // 500 MB
         options.EnableDetailedErrors = true;
         options.HandshakeTimeout = TimeSpan.FromSeconds(60);
         options.KeepAliveInterval = TimeSpan.FromSeconds(15);
@@ -50,6 +52,26 @@ app.UseAntiforgery();
 // Using a temp file on disk instead of a MemoryStream avoids loading the entire
 // filtered output (potentially 100s of MB) into server RAM and avoids Base64
 // encoding overhead. The token is single-use; the file is deleted after serving.
+// Receives file directly via HTTP multipart — avoids routing file data through SignalR.
+app.MapPost("/upload", async (HttpRequest request, UploadFileService uploadService) =>
+{
+    var bodySizeFeature = request.HttpContext.Features.Get<IHttpMaxRequestBodySizeFeature>();
+    if (bodySizeFeature is { IsReadOnly: false })
+        bodySizeFeature.MaxRequestBodySize = 500L * 1024 * 1024;
+
+    var form = await request.ReadFormAsync(new FormOptions { MultipartBodyLengthLimit = 500L * 1024 * 1024 });
+    var file = form.Files.GetFile("file");
+    if (file == null || file.Length == 0)
+        return Results.BadRequest("No file");
+
+    var tempPath = Path.GetTempFileName();
+    await using var fs = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None, 81920);
+    await file.CopyToAsync(fs);
+
+    return Results.Text(uploadService.Register(tempPath));
+})
+.DisableAntiforgery();
+
 app.MapGet("/download/{token}", (string token, DownloadFileService downloadService) =>
 {
     var filePath = downloadService.GetAndRemove(token);
