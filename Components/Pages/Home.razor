@@ -54,17 +54,70 @@
         </div>
     }
 
-    <!-- Filters (visible after file load) -->
+    <!-- Tabs + content (visible after file load) -->
     @if (availableTags.Any()) {
+
+        <!-- Tab bar -->
+        <div class="tab-bar mb-3">
+            <button class="tab-btn @(activeTab == 0 ? "active" : "")" @onclick='() => activeTab = 0'>
+                <i class="bi bi-funnel me-1"></i>Filters
+            </button>
+            <button class="tab-btn @(activeTab == 1 ? "active" : "")" @onclick='() => activeTab = 1'>
+                <i class="bi bi-phone me-1"></i>Device Info
+                @if (deviceInfo?.HasData == true) { <span class="tab-dot"></span> }
+            </button>
+        </div>
+
+        <!-- Device Info panel -->
+        @if (activeTab == 1) {
+            <div class="device-panel mb-3">
+                @if (deviceInfo?.HasData == true) {
+                    <div class="info-section">
+                        <div class="info-section-title">Device</div>
+                        @InfoRow("Model",           deviceInfo.Model)
+                        @InfoRow("Chipset",         deviceInfo.Chipset)
+                        @InfoRow("Hardware",        deviceInfo.Hardware)
+                        @InfoRow("Display",         deviceInfo.Display)
+                        @InfoRow("OS Version",      deviceInfo.OsVersion != null ? $"Android {deviceInfo.OsVersion}" : null)
+                        @InfoRow("SDK Version",     deviceInfo.SdkVersion)
+                        @InfoRow("Debug Level",     deviceInfo.DebugLevel)
+                        @InfoRow("Network",         deviceInfo.Network)
+                        @InfoRow("Binary",          deviceInfo.Binary)
+                    </div>
+                    <div class="info-section mt-3">
+                        <div class="info-section-title">Memory</div>
+                        @InfoRow("Physical RAM",    deviceInfo.PhysicalRam)
+                        @InfoRow("Total RAM",       deviceInfo.MemTotalKb   != null ? DeviceInfo.FormatKb(deviceInfo.MemTotalKb.Value)   : null)
+                        @InfoRow("Available",       deviceInfo.MemAvailableKb != null ? DeviceInfo.FormatKb(deviceInfo.MemAvailableKb.Value) : null)
+                        @InfoRow("Free",            deviceInfo.MemFreeKb    != null ? DeviceInfo.FormatKb(deviceInfo.MemFreeKb.Value)    : null)
+                    </div>
+                    <div class="info-section mt-3">
+                        <div class="info-section-title">Battery</div>
+                        @InfoRow("Captured at",     deviceInfo.DumpstateTime)
+                        @InfoRow("Level",           deviceInfo.BatteryLevel != null ? $"{deviceInfo.BatteryLevel}%" : null)
+                        @InfoRow("Status",          deviceInfo.BatteryStatus)
+                        @InfoRow("Health",          deviceInfo.BatteryHealth)
+                        @InfoRow("Voltage",         deviceInfo.BatteryVoltageMillivolts != null ? $"{deviceInfo.BatteryVoltageMillivolts} mV" : null)
+                        @InfoRow("Temperature",     deviceInfo.BatteryTemperatureCelsius != null ? $"{deviceInfo.BatteryTemperatureCelsius:F1} °C" : null)
+                        @InfoRow("Technology",      deviceInfo.BatteryTechnology)
+                    </div>
+                } else {
+                    <p class="text-muted" style="font-size:0.85rem;">No device information found in this log.</p>
+                }
+            </div>
+        }
+
+        <!-- Filters section (tab 0 only) -->
+        @if (activeTab == 0) {
         <div class="filters-section mb-3">
             <!-- Header row -->
             <div class="d-flex justify-content-between align-items-center mb-3">
                 <span class="fw-bold" style="font-size:0.75rem; text-transform:uppercase; letter-spacing:0.06em; color:var(--text-muted);">
                     <i class="bi bi-funnel me-1"></i> Filters
                 </span>
-                @if (selectedTags.Any() || selectedLevels.Any() || !string.IsNullOrWhiteSpace(keywordFilter)) {
+                @if (selectedTags.Any() || selectedLevels.Any() || selectedSections.Any() || !string.IsNullOrWhiteSpace(keywordFilter)) {
                     <button class="btn-clear" @onclick="ClearAllFilters">
-                        <i class="bi bi-x me-1"></i>Clear all (@(selectedTags.Count + selectedLevels.Count + (string.IsNullOrWhiteSpace(keywordFilter) ? 0 : 1)))
+                        <i class="bi bi-x me-1"></i>Clear all (@(selectedTags.Count + selectedLevels.Count + selectedSections.Count + (string.IsNullOrWhiteSpace(keywordFilter) ? 0 : 1)))
                     </button>
                 }
             </div>
@@ -138,9 +191,64 @@
                     </button>
                 }
             </div>
-        </div>
 
-        <!-- Action bar -->
+        </div>
+        } <!-- end activeTab == 0 filters -->
+
+        <!-- Dump sections (separate block, only if dumpstate) -->
+        @if (activeTab == 0 && availableSections.Any()) {
+        <div class="filters-section mb-3">
+            <div class="d-flex justify-content-between align-items-center" style="cursor:pointer;" @onclick='() => showSections = !showSections'>
+                <span class="fw-bold" style="font-size:0.75rem; text-transform:uppercase; letter-spacing:0.06em; color:var(--text-muted);">
+                    <i class="bi bi-layers me-1"></i> Dump Sections
+                    <span style="font-weight:400; text-transform:none; letter-spacing:0; color:var(--text-muted);">(@availableSections.Count)</span>
+                    @if (selectedSections.Any()) {
+                        <span style="color:#a5b4fc; font-weight:600;"> · @selectedSections.Count selected</span>
+                    }
+                </span>
+                <i class="bi @(showSections ? "bi-chevron-up" : "bi-chevron-down")" style="color:var(--text-muted); font-size:0.75rem;"></i>
+            </div>
+            @if (showSections) {
+                <div class="mt-3">
+                    <div class="d-flex justify-content-end mb-2">
+                        @if (selectedSections.Any()) {
+                            <button class="btn-clear" @onclick="() => selectedSections.Clear()">
+                                <i class="bi bi-x me-1"></i>Clear
+                            </button>
+                        }
+                    </div>
+                    <div class="search-wrapper mb-2">
+                        <i class="bi bi-search search-icon" style="font-size:0.8rem;"></i>
+                        <input type="text" class="search-input"
+                               placeholder="Search dump sections..."
+                               @bind="sectionSearchQuery" @bind:event="oninput" />
+                        @if (!string.IsNullOrWhiteSpace(sectionSearchQuery)) {
+                            <button class="btn-select-filtered" @onclick="() => sectionSearchQuery = string.Empty">
+                                <i class="bi bi-x"></i>
+                            </button>
+                        }
+                    </div>
+                    <div class="tag-chips-wrap">
+                        @foreach (var sec in FilteredSections) {
+                            var isActive = selectedSections.Contains(sec);
+                            <button class="tag-chip section-chip @(isActive ? "active" : "")"
+                                    title="@sec"
+                                    @onclick="() => ToggleSectionClick(sec)">
+                                @if (!string.IsNullOrEmpty(sectionSearchQuery) && sec.Contains(sectionSearchQuery, StringComparison.OrdinalIgnoreCase)) {
+                                    <strong>@sec</strong>
+                                } else {
+                                    @sec
+                                }
+                            </button>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+        }
+
+        <!-- Action bar (filters tab only) -->
+        @if (activeTab == 0) {
         <div class="action-bar mb-3">
             <label>Context</label>
             <div class="context-stepper">
@@ -164,16 +272,18 @@
                 <i class="bi bi-layout-split me-1"></i>Separator
             </button>
 
-            @if (selectedTags.Any() || selectedLevels.Any() || !string.IsNullOrWhiteSpace(keywordFilter)) {
-                <span class="filter-count-badge">@(selectedTags.Count + selectedLevels.Count + (string.IsNullOrWhiteSpace(keywordFilter) ? 0 : 1)) filters</span>
+            @if (selectedTags.Any() || selectedLevels.Any() || selectedSections.Any() || !string.IsNullOrWhiteSpace(keywordFilter)) {
+                <span class="filter-count-badge">@(selectedTags.Count + selectedLevels.Count + selectedSections.Count + (string.IsNullOrWhiteSpace(keywordFilter) ? 0 : 1)) filters</span>
             }
 
             <button class="btn-generate"
                     @onclick="GenerateAndDownload"
-                    disabled="@(isProcessing || isGenerating || (!selectedTags.Any() && !selectedLevels.Any() && string.IsNullOrWhiteSpace(keywordFilter)))">
+                    disabled="@(isProcessing || isGenerating || (!selectedTags.Any() && !selectedLevels.Any() && !selectedSections.Any() && string.IsNullOrWhiteSpace(keywordFilter)))">
                 <i class="bi bi-gear-fill me-1"></i> Generate Report
             </button>
         </div>
+        } <!-- end activeTab == 0 action bar -->
+
     } else if (!isProcessing) {
         <!-- Empty state -->
         <div class="empty-state mb-3">
@@ -277,6 +387,26 @@
     private bool isGenerating = false;
     private int progress = 0;
     private string statusMessage = "";
+    private int activeTab = 0;
+    private DeviceInfo? deviceInfo = null;
+    private List<string> availableSections = new();
+    private List<string> selectedSections = new();
+    private string sectionSearchQuery = "";
+    private bool showSections = false;
+
+    private IEnumerable<string> FilteredSections =>
+        string.IsNullOrWhiteSpace(sectionSearchQuery)
+            ? availableSections
+            : availableSections.Where(s => s.Contains(sectionSearchQuery, StringComparison.OrdinalIgnoreCase));
+
+    private RenderFragment InfoRow(string label, string? value) => builder =>
+    {
+        if (value == null) return;
+        builder.OpenElement(0, "div");  builder.AddAttribute(1, "class", "info-row");
+        builder.OpenElement(2, "span"); builder.AddAttribute(3, "class", "info-label"); builder.AddContent(4, label); builder.CloseElement();
+        builder.OpenElement(5, "span"); builder.AddAttribute(6, "class", "info-value"); builder.AddContent(7, value); builder.CloseElement();
+        builder.CloseElement();
+    };
 
     private IEnumerable<string> FilteredTags =>
         string.IsNullOrWhiteSpace(tagSearchQuery)
@@ -290,7 +420,13 @@
     private void ClearAllFilters() {
         selectedTags.Clear();
         selectedLevels.Clear();
+        selectedSections.Clear();
         keywordFilter = "";
+    }
+
+    private void ToggleSectionClick(string section) {
+        if (selectedSections.Contains(section)) selectedSections.Remove(section);
+        else selectedSections.Add(section);
     }
 
     private void ClampContextLines() {
@@ -325,6 +461,10 @@
             availableLevels.Clear();
             selectedTags.Clear();
             selectedLevels.Clear();
+            deviceInfo = null;
+            availableSections.Clear();
+            selectedSections.Clear();
+            activeTab = 0;
 
             AddLog($"Loading file: {e.File.Name}");
             StateHasChanged();
@@ -371,8 +511,11 @@
             availableTags = result.Tags;
             availableLevels = result.Levels;
             levelCounts = result.LevelCounts;
+            deviceInfo = result.DeviceInfo;
+            availableSections = result.Sections;
 
-            AddLog($"Analysis complete. Found {availableTags.Count} tags, {availableLevels.Count} levels.");
+            AddLog($"Analysis complete. Found {availableTags.Count} tags, {availableLevels.Count} levels." +
+                   (result.DeviceInfo.HasData ? $" Device: {result.DeviceInfo.Model ?? "unknown"}." : ""));
             AppState.SetFileInfo(loadedFileName, availableTags.Count, availableLevels.Count);
             statusMessage = "Ready!";
         } catch (Exception ex) {
@@ -411,7 +554,7 @@
             using (var inputFs = new FileStream(tempFilePath, FileMode.Open, FileAccess.Read, FileShare.Read))
             using (var outputFs = new FileStream(outputTempPath, FileMode.Create, FileAccess.Write, FileShare.None))
             {
-                await LogProcessor.GenerateFilteredLogAsync(inputFs, outputFs, selectedTags, selectedLevels, contextLines, contextDirection, useSeparator, kw);
+                await LogProcessor.GenerateFilteredLogAsync(inputFs, outputFs, selectedTags, selectedLevels, contextLines, contextDirection, useSeparator, kw, selectedSections);
             }
 
             var token = DownloadService.RegisterFile(outputTempPath);

@@ -564,3 +564,76 @@ main {
     right: 0.75rem;
     top: 0.5rem;
 }
+
+/* ── Tabs ──────────────────────────────────── */
+.tab-bar {
+    display: flex;
+    gap: 0;
+    border-bottom: 1px solid var(--border-subtle);
+}
+.tab-btn {
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--text-muted);
+    padding: 0.45rem 1.1rem;
+    font-size: 0.82rem;
+    cursor: pointer;
+    margin-bottom: -1px;
+    transition: color 0.15s, border-color 0.15s;
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+}
+.tab-btn:hover  { color: var(--text-primary); }
+.tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+.tab-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+    display: inline-block;
+}
+
+/* ── Device Info panel ─────────────────────── */
+.device-panel {
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: 10px;
+    padding: 1.1rem 1.25rem;
+}
+.info-section-title {
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.09em;
+    color: var(--text-muted);
+    font-weight: 600;
+    margin-bottom: 0.4rem;
+}
+.info-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 0.28rem 0;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    font-size: 0.82rem;
+    gap: 1rem;
+}
+.info-row:last-child { border-bottom: none; }
+.info-label {
+    color: var(--text-muted);
+    white-space: nowrap;
+    flex: 0 0 130px;
+}
+.info-value {
+    color: var(--text-primary);
+    text-align: right;
+    word-break: break-all;
+}
+
+/* ── Section chips ─────────────────────────── */
+.section-chip {
+    border-left: 2px solid var(--border-strong) !important;
+}
+.section-chip.active {
+    border-left-color: var(--accent) !important;
+}
