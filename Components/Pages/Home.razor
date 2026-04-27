@@ -317,8 +317,6 @@
             return;
         }
         const xhr = new XMLHttpRequest();
-        const form = new FormData();
-        form.append('file', file);
         let lastUpdate = 0;
         xhr.upload.addEventListener('progress', e => {
             if (!e.lengthComputable) return;
@@ -339,7 +337,8 @@
             dotNetRef.invokeMethodAsync('OnUploadError', 'Network error during upload');
         });
         xhr.open('POST', '/upload');
-        xhr.send(form);
+        xhr.setRequestHeader('Content-Type', 'application/octet-stream');
+        xhr.send(file);
     };
 
     window.downloadFromUrl = async (url, filename) => {

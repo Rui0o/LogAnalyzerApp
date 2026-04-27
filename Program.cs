@@ -14,6 +14,7 @@ if (!builder.Environment.IsDevelopment())
     builder.WebHost.UseUrls(url);
 }
 
+
 builder.Services.AddScoped<LogProcessorService>();
 builder.Services.AddScoped<AppStateService>();
 
@@ -52,21 +53,22 @@ app.UseAntiforgery();
 // Using a temp file on disk instead of a MemoryStream avoids loading the entire
 // filtered output (potentially 100s of MB) into server RAM and avoids Base64
 // encoding overhead. The token is single-use; the file is deleted after serving.
-// Receives file directly via HTTP multipart — avoids routing file data through SignalR.
+// Receives raw binary body — single stream direct to disk, no multipart buffering overhead.
 app.MapPost("/upload", async (HttpRequest request, UploadFileService uploadService) =>
 {
     var bodySizeFeature = request.HttpContext.Features.Get<IHttpMaxRequestBodySizeFeature>();
     if (bodySizeFeature is { IsReadOnly: false })
         bodySizeFeature.MaxRequestBodySize = 500L * 1024 * 1024;
 
-    var form = await request.ReadFormAsync(new FormOptions { MultipartBodyLengthLimit = 500L * 1024 * 1024 });
-    var file = form.Files.GetFile("file");
-    if (file == null || file.Length == 0)
-        return Results.BadRequest("No file");
-
     var tempPath = Path.GetTempFileName();
-    await using var fs = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None, 81920);
-    await file.CopyToAsync(fs);
+    await using var fs = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None, 131072);
+    await request.Body.CopyToAsync(fs);
+
+    if (fs.Length == 0)
+    {
+        File.Delete(tempPath);
+        return Results.BadRequest("No file");
+    }
 
     return Results.Text(uploadService.Register(tempPath));
 })
